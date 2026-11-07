@@ -1,23 +1,24 @@
 """OpenRouter-Adapter — schnelle, starke Vision-Modelle in der Cloud.
 
 Achtung Datenschutz: Die Bildinhalte gehen an den jeweiligen Modell-Anbieter.
-Nur verwenden, wenn das Projekt NICHT auf privacy_lokal steht.
+Nur verwenden, wenn das Projekt NICHT auf privacy_lokal steht. Der API-Key
+wird im Dashboard (Laufzeit-Einstellungen, DB) oder per Env gesetzt.
 """
 from __future__ import annotations
 
 import httpx
 
-from ..config import get_settings
+from .. import runtime
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
 class OpenRouterProvider:
     async def analysieren(self, prompt: str, bilder_b64: list[str], model: str) -> dict:
-        s = get_settings()
-        if not s.openrouter_key:
-            raise RuntimeError("OPENROUTER_API_KEY ist nicht gesetzt (Env-Datei /etc/anwesentwin/anwesentwin.env)")
-        nutz_modell = model or s.openrouter_model
+        key = runtime.hole("openrouter_key")
+        if not key:
+            raise RuntimeError("Kein OpenRouter-API-Key gesetzt (Einstellungsseite im Dashboard)")
+        nutz_modell = model or runtime.hole("openrouter_model")
         content: list[dict] = [{"type": "text", "text": prompt}]
         for b64 in bilder_b64:
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
@@ -31,7 +32,7 @@ class OpenRouterProvider:
             resp = await client.post(
                 API_URL,
                 json=payload,
-                headers={"Authorization": f"Bearer {s.openrouter_key}"},
+                headers={"Authorization": f"Bearer {key}"},
             )
             resp.raise_for_status()
             daten = resp.json()

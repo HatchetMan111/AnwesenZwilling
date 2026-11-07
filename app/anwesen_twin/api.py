@@ -12,10 +12,11 @@ import time
 import uuid
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
-from . import osm
+from . import osm, runtime
 from .config import get_settings
 from .db import connect, row_to_dict, utc_now
 from .export import baue_html
@@ -124,16 +125,75 @@ async def logout(response: Response):
 
 
 @router.get("/settings")
-async def settings_info():
-    """Nur Nicht-Geheimnisse fürs Frontend (welche Provider sind nutzbar)."""
-    s = get_settings()
+async def settings_info(_: None = Depends(brauche_admin)):
+    return _settings_payload()
+
+
+def _settings_payload() -> dict:
+    """Nur Nicht-Geheimnisse fürs Frontend; der API-Key kommt maskiert zurück."""
+    key = runtime.hole("openrouter_key")
     return {
         "status": "ok",
-        "ollama_url": s.ollama_url,
-        "ollama_model": s.ollama_model,
-        "openrouter_aktiv": bool(s.openrouter_key),
-        "openrouter_model": s.openrouter_model,
+        "ollama_url": runtime.hole("ollama_url"),
+        "ollama_model": runtime.hole("ollama_model"),
+        "openrouter_aktiv": bool(key),
+        "openrouter_key_maskiert": runtime.maske(key),
+        "openrouter_model": runtime.hole("openrouter_model"),
     }
+
+
+class EinstellungenIn(BaseModel):
+    ollama_url: str | None = Field(default=None, max_length=300)
+    ollama_model: str | None = Field(default=None, max_length=120)
+    openrouter_key: str | None = Field(default=None, max_length=200)  # None=unverändert, ""=löschen
+    openrouter_model: str | None = Field(default=None, max_length=200)
+
+
+@router.put("/settings")
+async def setze_einstellungen(inp: EinstellungenIn, _: None = Depends(brauche_admin)):
+    if inp.openrouter_key is not None:
+        key = inp.openrouter_key.strip()
+        if key == "":
+            runtime.loeschen("openrouter_key")
+        else:
+            runtime.setze("openrouter_key", key)
+    for feld in ("ollama_url", "ollama_model", "openrouter_model"):
+        wert = getattr(inp, feld)
+        if wert is not None:
+            runtime.setze(feld, wert.strip().rstrip("/"))
+    return _settings_payload()
+
+
+@router.post("/settings/test-ollama")
+async def test_ollama(_: None = Depends(brauche_admin)):
+    """Ping an Ollama (/api/tags) — liefert gleich die verfügbaren Modelle mit."""
+    url = runtime.hole("ollama_url").rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            r = await client.get(f"{url}/api/tags")
+            r.raise_for_status()
+            modelle = [m.get("name", "") for m in r.json().get("models", [])]
+        return {"status": "ok", "erreichbar": True, "modelle": modelle}
+    except Exception as e:
+        return {"status": "ok", "erreichbar": False, "fehler": str(e)[:200]}
+
+
+@router.post("/settings/test-openrouter")
+async def test_openrouter(_: None = Depends(brauche_admin)):
+    """Key gegen OpenRouter prüfen (GET /api/v1/key) — inkl. Guthaben-Info."""
+    key = runtime.hole("openrouter_key")
+    if not key:
+        return {"status": "ok", "gueltig": False, "fehler": "Kein API-Key gespeichert"}
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            r = await client.get("https://openrouter.ai/api/v1/key", headers={"Authorization": f"Bearer {key}"})
+            if r.status_code == 401:
+                return {"status": "ok", "gueltig": False, "fehler": "Key ungültig (401)"}
+            r.raise_for_status()
+            info = r.json().get("data", {})
+            return {"status": "ok", "gueltig": True, "nutzung": info.get("usage"), "limit": info.get("limit")}
+    except Exception as e:
+        return {"status": "ok", "gueltig": False, "fehler": str(e)[:200]}
 
 
 # --------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Globe, Lock, ImagePlus, Sparkles, RefreshCw,
-  Download, Trash2, Save, Eye, Loader2, Info,
+  Download, Trash2, Save, Eye, Loader2, Info, Settings,
 } from 'lucide-react';
 import { api, toastSetzen } from '../api';
 
@@ -145,6 +145,9 @@ export default function ProjektDetail() {
           </button>
         </div>
         <div className="flex gap-2">
+          <Link to="/einstellungen" className="btn-sekundaer" title="Einstellungen (KI-Provider)">
+            <Settings size={16} />
+          </Link>
           <button className="btn-sekundaer" onClick={() => setPreviewKey((k) => k + 1)}>
             <Eye size={16} /> Preview neu laden
           </button>

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { House, Plus, Lock, MapPin, LogOut } from 'lucide-react';
+import { House, Plus, Lock, MapPin, LogOut, Settings } from 'lucide-react';
 import { api, toastSetzen } from '../api';
 
 interface Projekt {
@@ -61,9 +61,14 @@ export default function Projekte() {
             <p className="text-xs text-lv-blass">GPS + Bilder → interaktiver 3D-Zwilling</p>
           </div>
         </div>
-        <button onClick={abmelden} className="btn-sekundaer" title="Abmelden">
-          <LogOut size={16} /> Abmelden
-        </button>
+        <div className="flex gap-2">
+          <Link to="/einstellungen" className="btn-sekundaer" title="Einstellungen (KI-Provider)">
+            <Settings size={16} /> Einstellungen
+          </Link>
+          <button onClick={abmelden} className="btn-sekundaer" title="Abmelden">
+            <LogOut size={16} /> Abmelden
+          </button>
+        </div>
       </header>
 
       <div className="karte flex gap-2">
