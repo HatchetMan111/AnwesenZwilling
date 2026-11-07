@@ -1,0 +1,24 @@
+[Unit]
+Description=AnwesenTwin — Digitaler Zwilling aus GPS & Bildern
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/anwesentwin/app
+EnvironmentFile=-/etc/anwesentwin/anwesentwin.env
+ExecStart=/opt/anwesentwin/.venv/bin/uvicorn anwesen_twin.main:app --host ${ANWESENTWIN_HOST} --port ${ANWESENTWIN_PORT}
+Restart=always
+RestartSec=3
+
+StateDirectory=anwesentwin
+User=anwesentwin
+Group=anwesentwin
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/anwesentwin /opt/anwesentwin
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

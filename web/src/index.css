@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-lv-bg text-lv-text;
+  }
+  input,
+  select,
+  textarea {
+    @apply bg-lv-karte border border-lv-kante rounded-lg px-3 py-2 text-sm outline-none focus:border-lv-limette;
+  }
+  ::placeholder {
+    @apply text-lv-blass/50;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primaer {
+    @apply btn bg-lv-limette text-lv-bg hover:brightness-110;
+  }
+  .btn-sekundaer {
+    @apply btn border border-lv-kante text-lv-text hover:border-lv-limette/60;
+  }
+  .btn-gefahr {
+    @apply btn border border-red-900/60 text-red-300 hover:bg-red-950/40;
+  }
+  .karte {
+    @apply bg-lv-karte border border-lv-kante rounded-2xl p-5;
+  }
+}
