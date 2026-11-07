@@ -5,7 +5,7 @@ Aus **GPS-Koordinaten + Bildern** einen interaktiven **three.js-Digital-Twin** d
 ## Installation (Einzeiler auf dem Proxmox-Host)
 
 ```bash
-bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AnwesenTwin/main/install/anwesentwin.sh)"
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AnwesenZwilling/main/install/anwesentwin.sh)"
 ```
 
 Das Script (Community-Scripts-Stil): erstellt selbstständig einen **unprivileged LXC** (Debian 12, nächste freie ID ab 200, 2 vCPU / 2 GB RAM / 8 GB Disk, `onboot: 1`), installiert Python + App + systemd-Dienst und verifiziert am Ende Service und Web-UI. Bei Fehlern gibt es die **komplette Fehlerkette** mit Logauszug; für den vollen Trace: `bash -x install/anwesentwin.sh`.

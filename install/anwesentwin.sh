@@ -3,7 +3,7 @@
 #  AnwesenTwin — Proxmox VE Installer (Community-Scripts-Stil, unprivileged LXC)
 #
 #  Einzeiler auf dem Proxmox-Host:
-#    bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AnwesenTwin/main/install/anwesentwin.sh)"
+#    bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AnwesenZwilling/main/install/anwesentwin.sh)"
 #
 #  Was passiert:
 #    - erstellt unprivileged LXC (Debian 12, nächste freie ID ab 200) und
@@ -28,7 +28,7 @@ set -Eeuo pipefail
 # ---- Konfiguration (nur HIER anpassen) ---------------------------------------
 APP="anwesentwin"                  # CT-Hostname + systemd-Dienstname
 APP_TITLE="AnwesenTwin"
-REPO="HatchetMan111/AnwesenTwin"   # <user>/<repo> — bei Umbenennung nur hier ändern
+REPO="HatchetMan111/AnwesenZwilling"   # <user>/<repo> — bei Umbenennung nur hier ändern
 BRANCH="main"
 APP_PORT="8080"                    # Web-UI-Port im CT
 CT_HOSTNAME="$APP"

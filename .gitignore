@@ -1,5 +1,6 @@
 data/
 __pycache__/
 node_modules/
-web/dist/
 *.db
+# Achtung: web/dist wird GEBIETET (git add -f nicht nötig, aber bewusst NICHT ignoriert),
+# weil der Proxmox-Installer das gebaute Dashboard aus dem GitHub-Tarball bezieht.
