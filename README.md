@@ -2,6 +2,51 @@
 
 Aus **GPS-Koordinaten + Bildern** einen interaktiven **three.js-Digital-Twin** des Anwesens bauen — selbst gehostet in einem LXC auf Proxmox.
 
+## Installation (Einzeiler auf dem Proxmox-Host)
+
+```bash
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/AnwesenTwin/main/install/anwesentwin.sh)"
+```
+
+Das Script (Community-Scripts-Stil): erstellt selbstständig einen **unprivileged LXC** (Debian 12, nächste freie ID ab 200, 2 vCPU / 2 GB RAM / 8 GB Disk, `onboot: 1`), installiert Python + App + systemd-Dienst und verifiziert am Ende Service und Web-UI. Bei Fehlern gibt es die **komplette Fehlerkette** mit Logauszug; für den vollen Trace: `bash -x install/anwesentwin.sh`.
+
+Erwartete Ausgabe am Ende:
+
+```
+✅ systemd-Dienst läuft (systemctl is-active → active)
+✅ Web-UI antwortet (HTTP-Check: {"status":"ok"})
+==============================================================
+  AnwesenTwin ist installiert
+  Web-UI:    http://<CT-IP>:8080
+  Passwort:  <generiertes Login-Passwort>
+  CT-Root:   <generiertes CT-Passwort>
+==============================================================
+```
+
+### Betrieb
+
+| Aktion | Befehl (auf dem Proxmox-Host) |
+|---|---|
+| App aktualisieren (Daten bleiben) | `bash install/anwesentwin.sh --update` |
+| DB + Medien sichern | `bash install/anwesentwin.sh --backup` |
+| Status + URL | `bash install/anwesentwin.sh --status` |
+| Entfernen (Rückfrage) | `bash install/anwesentwin.sh --uninstall` |
+| Feste IP/ID/Port | Flags `--ip 192.168.1.50/24`, `--id 210`, `--port 8080` |
+| Dateien aus lokalem Repo-Ordner | `bash install/anwesentwin.sh --local` |
+
+Der Container ist **reboot-sicher**: `onboot: 1` startet den CT automatisch, der Dienst läuft als systemd-Unit mit `Restart=always` und `After=network-online.target`.
+
+### Installations-Testlauf (auf dem Proxmox-Host)
+
+```bash
+# 1) Installieren (Einzeiler oben) — Ausgabe enthält CT-ID + Passwörter
+# 2) Reboot-Sicherheit belegen:
+pct reboot <CT-ID>
+sleep 20 && pct exec <CT-ID> -- systemctl is-active anwesentwin   # → active
+# 3) Web-UI wieder erreichbar:
+pct exec <CT-ID> -- curl -sf http://localhost:8080/api/health     # → {"status":"ok"}
+```
+
 ## Wie es funktioniert
 
 ```
@@ -68,19 +113,18 @@ python3 -m pytest tests/ -q
 
 Login: Passwort aus `ANWESENTWIN_PASSWORD` (Dev-Default: `admin`).
 
-## Proxmox-LXC (empfohlen)
+## Proxmox-LXC
 
-Auf dem Proxmox-Host:
+Der Einzeiler oben erledigt alles. Im CT liegen:
 
-```bash
-bash install/anwesentwin.sh          # installiert CT, Web-UI auf :8080
-bash install/anwesentwin.sh --update # App erneuern, Daten bleiben
-bash install/anwesentwin.sh --backup # DB + Medien sichern
-```
+- `/opt/anwesentwin/` — App (Backend, gebautes Dashboard `web/dist`, Engine `engine/twin.js`)
+- `/var/lib/anwesentwin/` — SQLite-DB + hochgeladene Medien (systemd `StateDirectory`)
+- `/etc/anwesentwin/anwesentwin.env` — Secrets (Session-Secret, Web-Passwort, Bind `0.0.0.0:${PORT}`)
 
-Der Installer generiert Passwort + Session-Secret nach `/etc/anwesentwin/anwesentwin.env`
-(im CT) und gibt sie aus. Ollama verbinden per `OLLAMA_URL` in dieser Env-Datei
-(z. B. `http://192.168.1.10:11434` für eine Ollama-VM mit GPU-Passthrough).
+Ollama verbindest du am einfachsten über die **Einstellungsseite im Dashboard**
+(wird in der SQLite-DB gespeichert, überlebt Updates) — alternativ per Env in
+`/etc/anwesentwin/anwesentwin.env` (z. B. `OLLAMA_URL=http://192.168.1.10:11434`
+für eine Ollama-VM mit GPU-Passthrough).
 
 ## KI-Backends konfigurieren
 
