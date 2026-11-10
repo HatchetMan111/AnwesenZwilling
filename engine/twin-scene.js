@@ -353,6 +353,20 @@ function baueGebaeude(geometrie) {
   wand.castShadow = true; wand.receiveShadow = true;
   group.add(wand);
 
+  // Etagen-Gesimsbänder: machen die Stockwerke im Modell ablesbar
+  const gesimsMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(geometrie.wand_farbe).multiplyScalar(0.88), roughness: 0.9,
+  });
+  const gesimsProfil = [[0, -0.05], [0.14, -0.05], [0.14, 0.05], [0, 0.05]];
+  for (let i = 1; i < Math.max(geometrie.etagen, 1); i++) {
+    const band = new THREE.Mesh(
+      sweep(gesimsProfil, geometrie.footprint.map(([x, z]) => [x, z]), { closed: true, y: i * geometrie.etagen_hoehe }),
+      gesimsMat,
+    );
+    band.castShadow = true;
+    group.add(band);
+  }
+
   const dachInfo = baueDach(geometrie, wandHoehe, dachMat, giebelMat);
   dachInfo.group.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   group.add(dachInfo.group);
@@ -427,7 +441,7 @@ function baueVegetation(spec) {
 // Wege
 // ---------------------------------------------------------------------------
 
-function baueWege(spec) {
+function baueWege(spec, y = 0.03) {
   const group = new THREE.Group();
   // DoubleSide: die Band-Geometrie kann je nach Pfadrichtung nach unten zeigen
   const matZufahrt = new THREE.MeshStandardMaterial({ map: texKies, roughness: 1, side: THREE.DoubleSide });
@@ -435,7 +449,7 @@ function baueWege(spec) {
   const matTerrasse = new THREE.MeshStandardMaterial({ color: '#a07a52', roughness: 0.9, side: THREE.DoubleSide });
   for (const w of spec.wege || []) {
     const punkte = w.punkte.map(([x, z]) => [x, z]);
-    const geo = band(punkte, w.breite, 0.03);
+    const geo = band(punkte, w.breite, y);
     const mat = w.farbe ? new THREE.MeshStandardMaterial({ color: w.farbe, roughness: 0.95 })
       : w.art === 'zufahrt' ? matZufahrt : w.art === 'terrasse' ? matTerrasse : matWeg;
     const m = new THREE.Mesh(geo, mat);
@@ -449,11 +463,10 @@ function baueWege(spec) {
 // Hauptbau
 // ---------------------------------------------------------------------------
 
-export function buildScene(spec) {
+export function buildScene(spec, luftbild = null) {
   const group = new THREE.Group();
   const glows = [];
 
-  // Boden
   // Boden; boden_farbe tönt die Grastextur (nur wenn vom Default abweichend —
   // der Default entspricht der Textur selbst, sonst würde alles doppelt grün).
   const bodenMat = new THREE.MeshStandardMaterial({ map: texGrass, roughness: 1 });
@@ -465,18 +478,37 @@ export function buildScene(spec) {
   boden.receiveShadow = true;
   group.add(boden);
 
-  // Grundstück (gemähte Streifen, leicht über dem Boden)
+  // Luftbild (Satellit) — realer Bodenteppich, exakt ausgerichtet am GPS-Punkt.
+  // Das Bild ist Nord-oben, das Koordinatensystem ist +x Ost / −z Nord: keine Drehung nötig.
+  let bodenY = 0.015;
+  if (luftbild && luftbild.dataUrl && luftbild.laenge_m > 5) {
+    const tex = new THREE.TextureLoader().load(luftbild.dataUrl);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    const luft = new THREE.Mesh(
+      new THREE.PlaneGeometry(luftbild.laenge_m, luftbild.laenge_m),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 1 }),
+    );
+    luft.rotation.x = -Math.PI / 2;
+    const [ox, oz] = luftbild.offset || [0, 0];
+    luft.position.set(ox, 0.012, oz);
+    luft.receiveShadow = true;
+    group.add(luft);
+    bodenY = 0.03;                       // Grundstück & Wege über dem Bild halten
+  }
+
+  // Grundstück (gemähte Streifen, über dem Luftbild)
   if (spec.grundstueck?.polygon?.length >= 3) {
     const shape = new THREE.Shape(spec.grundstueck.polygon.map(([x, z]) => new THREE.Vector2(x, -z)));
     const g = new THREE.ShapeGeometry(shape);
     g.rotateX(-Math.PI / 2);
     const st = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: texRasenGemaeht, roughness: 1, side: THREE.DoubleSide }));
-    st.position.y = 0.015;
+    st.position.y = bodenY;
     st.receiveShadow = true;
     group.add(st);
   }
 
-  group.add(baueWege(spec));
+  group.add(baueWege(spec, luftbild ? 0.05 : 0.03));
 
   for (const geb of spec.gebaeude || []) {
     const { group: g, glowMat } = baueGebaeude(geb);

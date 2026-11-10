@@ -9,8 +9,10 @@ Geführter Assistent im Dashboard — kein technisches Vorwissen nötig:
 1. **Standort** — GPS-Koordinaten eintragen (oder Adresse suchen): die echten Gebäudeumrisse von OpenStreetMap kommen automatisch.
 2. **Bilder** — ein Foto vom Haus genügt; mehrere machen das Ergebnis genauer.
 3. **Analyse** — die KI erkennt Dachform, Etagen, Farben, PV-Anlage und Umgebung (lokal per Ollama oder Cloud per OpenRouter — umschaltbar, „Nur lokal"-Flag pro Projekt).
-4. **Anpassen** — alles per Klick: Etagen, Dachform, Farben, Fensteranteil, PV, Bäume, Hecken, Wege.
+4. **Anpassen** — alles per Klick: Etagen (als sichtbare Gesimsbänder in der Szene), Dachform, Farben, Fensteranteil, PV, Bäume, Hecken, Wege.
 5. **Ergebnis** — live ansehen (Morgen/Goldene Stunde/Dämmerung/Nacht) und als **einzelne HTML-Datei** herunterladen — läuft offline, teilbar, ohne GPS-Koordinaten.
+
+**Luftbild:** Auf Wunsch legt das Tool ein echtes Satellitenbild der Umgebung als Boden unter die Szene (Quelle: Esri World Imagery kostenlos, oder Google Static Maps mit eigenem API-Key — umstellbar unter Einstellungen). Der Abruf schickt nur die Koordinaten an den Karten-Dienst, das Bild wird einmalig lokal gespeichert und in den Export eingebettet.
 
 | Startseite | Standort | Analyse | Anpassen | Ergebnis (Nacht) |
 |---|---|---|---|---|

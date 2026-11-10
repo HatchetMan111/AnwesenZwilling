@@ -83,6 +83,12 @@ export interface OsmRoh {
   gruen: { polygon: Vec2[]; art: string }[];
 }
 
+export interface LuftbildMeta {
+  offset: [number, number];
+  laenge_m: number;
+  quelle: 'esri' | 'google';
+}
+
 export interface Projekt {
   id: number;
   name: string;
@@ -92,6 +98,8 @@ export interface Projekt {
   osm_roh: OsmRoh | null;
   spec: SceneSpec | null;
   bilder: Bild[];
+  hat_luftbild?: boolean;
+  luftbild_meta?: LuftbildMeta | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -104,6 +112,7 @@ export interface ProjektKurz {
   privacy_lokal: number;
   bild_anzahl: number;
   hat_spec: number;
+  hat_luftbild: number;
   updated_at: string;
 }
 
@@ -113,6 +122,9 @@ export interface Einst {
   openrouter_aktiv: boolean;
   openrouter_key_maskiert: string;
   openrouter_model: string;
+  luftbild_quelle: 'esri' | 'google';
+  google_aktiv: boolean;
+  google_maps_key_maskiert: string;
 }
 
 /** Rechteck-ähnlicher Grundriss? (gleiche Schwelle wie die Engine: Fläche/BBox > 0.8) */

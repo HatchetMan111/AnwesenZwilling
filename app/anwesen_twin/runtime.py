@@ -9,7 +9,8 @@ from __future__ import annotations
 from .config import get_settings
 from .db import connect
 
-SCHLUESSEL = ("ollama_url", "ollama_model", "openrouter_key", "openrouter_model")
+SCHLUESSEL = ("ollama_url", "ollama_model", "openrouter_key", "openrouter_model",
+              "luftbild_quelle", "google_maps_key")
 
 
 def _env_default(key: str) -> str:
@@ -19,6 +20,8 @@ def _env_default(key: str) -> str:
         "ollama_model": s.ollama_model,
         "openrouter_key": s.openrouter_key,
         "openrouter_model": s.openrouter_model,
+        "luftbild_quelle": "esri",
+        "google_maps_key": "",
     }[key]
 
 

@@ -38,6 +38,7 @@ const DEMO = {
 };
 
 const DATA = window.__TWIN_DATA__ || DEMO;
+const LUFTBILD = window.__TWIN_LUFTBILD__ || null;
 
 // ---------------------------------------------------------------- Root finden
 function findeRoot() {
@@ -72,7 +73,7 @@ root.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, W() / H(), 0.1, 2000);
 
-const welt = buildScene(DATA);
+const welt = buildScene(DATA, LUFTBILD);
 scene.add(welt.group);
 
 const env = createEnvironment(renderer, scene, { preset: PARAMS.get('light') || 'morning', scale: Math.max(40, welt.ausdehnung) });
@@ -109,6 +110,18 @@ function ui(el) {
   el.style.position = el.style.position || 'relative';
   el.appendChild(bar);
   markiere(env.current);
+  // Quellenangabe, sobald ein Luftbild liegt (Attribution als fair-use-Art)
+  if (window.__TWIN_LUFTBILD__) {
+    const quelle = window.__TWIN_LUFTBILD__.quelle === 'google' ? '© Google' : '© Esri, Maxar';
+    const attr = document.createElement('div');
+    attr.textContent = 'Luftbild ' + quelle;
+    attr.style.cssText = [
+      'position:absolute', 'bottom:8px', 'right:10px', 'z-index:10',
+      'font:10px/1 system-ui,sans-serif', 'color:rgba(229,231,235,.75)',
+      'background:rgba(16,20,26,.55)', 'padding:4px 8px', 'border-radius:999px',
+    ].join(';');
+    el.appendChild(attr);
+  }
 }
 function markiere(name) {
   root.querySelectorAll('.twin-ui button').forEach(b => {

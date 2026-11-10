@@ -24,12 +24,20 @@ def connect() -> sqlite3.Connection:
 
 
 def init_db() -> None:
+    """Führt noch nicht angewandte Migrationen aus (versioniert über schema_migrations —
+    makes multiple Starts/Tests harmlos, echte ALTER-Spalten brechen sonst doppelt)."""
     get_settings().db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = connect()
     try:
-        for pfad in MIGRATIONEN:
-            conn.executescript(pfad.read_text(encoding="utf-8"))
+        conn.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY)")
         conn.commit()
+        angewandt = {r["version"] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
+        for pfad in MIGRATIONEN:
+            if pfad.name in angewandt:
+                continue
+            conn.executescript(pfad.read_text(encoding="utf-8"))
+            conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (pfad.name,))
+            conn.commit()
     finally:
         conn.close()
 

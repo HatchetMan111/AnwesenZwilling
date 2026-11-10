@@ -41,6 +41,7 @@ export default function ProjektDetail() {
   const [adresse, setAdresse] = useState('');
   const [geoBusy, setGeoBusy] = useState(false);
   const [osmAn, setOsmAn] = useState(true);
+  const [luftbildAn, setLuftbildAn] = useState(true);
 
   // Schritt 2 — Bilder
   const fileInput = useRef<HTMLInputElement>(null);
@@ -105,16 +106,24 @@ export default function ProjektDetail() {
     setGeoBusy(true);
     try {
       await api(`/projekte/${pid}`, { method: 'PUT', body: JSON.stringify({ lat: latZahl, lon: lonZahl }) });
-      let specUeberschrieben = false;
+      let teile = ['Standort'];
       if (osmAn) {
         if (p?.spec && !zustimmen('Die OSM-Gebäudeumrisse ersetzen die aktuelle Szene (manuelle Anpassungen gehen verloren). Weiter?')) {
           setGeoBusy(false);
           return;
         }
         await api(`/projekte/${pid}/osm-sync`, { method: 'POST' });
-        specUeberschrieben = true;
+        teile.push('Gebäudeumrisse');
       }
-      toastSetzen(specUeberschrieben ? 'Standort gespeichert, Gebäudeumrisse geladen' : 'Standort gespeichert');
+      if (luftbildAn) {
+        try {
+          await api(`/projekte/${pid}/luftbild`, { method: 'POST' });
+          teile.push('Luftbild');
+        } catch (lb: any) {
+          toastSetzen(`Luftbild fehlgeschlagen: ${lb.message}`, false);
+        }
+      }
+      toastSetzen(`${teile.join(', ')} geladen`);
       await laden();
       setPreviewKey((k) => k + 1);
       if (undWeiter) setSchritt(2);
@@ -333,9 +342,14 @@ export default function ProjektDetail() {
             <input type="checkbox" checked={osmAn} onChange={(e) => setOsmAn(e.target.checked)} className="accent-lv-limette w-4 h-4" />
             <span>Echte Gebäudeumrisse &amp; Wege von OpenStreetMap laden <span className="text-lv-blass">(empfohlen)</span></span>
           </label>
+          <label className="flex items-center gap-2.5 text-sm">
+            <input type="checkbox" checked={luftbildAn} onChange={(e) => setLuftbildAn(e.target.checked)} className="accent-lv-limette w-4 h-4" />
+            <span>Satelliten-Luftbild der Umgebung als Boden laden <span className="text-lv-blass">(macht die Szene realistisch)</span></span>
+          </label>
           <p className="text-xs text-lv-blass flex gap-1.5 -mt-2">
             <Info size={13} className="shrink-0 mt-0.5" />
-            Dabei gehen nur die Koordinaten an den öffentlichen OSM-Dienst — nie Bilder oder etwas anderes.
+            Dabei gehen nur die Koordinaten an die OSM-/Karten-Dienste — nie Bilder oder etwas anderes.
+            Das Luftbild wird einmalig lokal gespeichert. Quelle umstellbar unter <b>Einstellungen</b> (Esri/Google).
           </p>
 
           <button className="btn-primaer w-full justify-center" onClick={() => speicherGps(true)}
@@ -343,7 +357,10 @@ export default function ProjektDetail() {
             {geoBusy ? <><Loader2 size={16} className="animate-spin" /> Speichere …</> : <>Speichern &amp; weiter zu den Bildern</>}
           </button>
           {p.lat != null && p.lon != null && (
-            <p className="text-xs text-lv-limette flex items-center gap-1.5"><Check size={13} /> Standort gespeichert ({p.lat.toFixed(5)}, {p.lon.toFixed(5)})</p>
+            <p className="text-xs text-lv-limette flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="flex items-center gap-1.5"><Check size={13} /> Standort gespeichert ({p.lat.toFixed(5)}, {p.lon.toFixed(5)})</span>
+              {p.hat_luftbild && <span className="flex items-center gap-1.5"><Check size={13} /> Luftbild geladen ({p.luftbild_meta?.quelle === 'google' ? 'Google' : 'Esri'})</span>}
+            </p>
           )}
         </section>
       )}

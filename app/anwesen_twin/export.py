@@ -29,6 +29,7 @@ TEMPLATE = """<!DOCTYPE html>
 <div id="twin-scene"></div>
 <script>
 window.__TWIN_DATA__ = __SZENENDATEN__;
+window.__TWIN_LUFTBILD__ = __LUFTBILD__;
 </script>
 <script>
 __ENGINE__
@@ -38,7 +39,7 @@ __ENGINE__
 """
 
 
-def baue_html(spec: SceneSpec, titel: str = "Mein Anwesen") -> str:
+def baue_html(spec: SceneSpec, titel: str = "Mein Anwesen", luftbild: dict | None = None) -> str:
     if not ENGINE_BUNDLE.exists():
         raise RuntimeError(
             "engine/twin.js fehlt — erst im Ordner engine/ 'npm install && npm run build' ausführen"
@@ -47,7 +48,10 @@ def baue_html(spec: SceneSpec, titel: str = "Mein Anwesen") -> str:
     # "</script" in JSON-Daten neutralisieren (gültig als \/ in JSON-Strings);
     # das Engine-Bundle macht esbuild selbst sicher (String-Literale werden escaped).
     daten = json.dumps(spec.model_dump(), ensure_ascii=False).replace("</", "<\\/")
+    # Luftbild: nur Data-URL + Zahlen — der Data-URL ist Base64 (kein Escape-Risiko)
+    luft = json.dumps(luftbild) if luftbild else "null"
     html_text = TEMPLATE.replace("__TITEL__", html.escape(titel))
     html_text = html_text.replace("__SZENENDATEN__", daten)
+    html_text = html_text.replace("__LUFTBILD__", luft)
     html_text = html_text.replace("__ENGINE__", bundle)
     return html_text

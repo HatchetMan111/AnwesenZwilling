@@ -4,6 +4,7 @@ Auth: HMAC-signiertes Session-Cookie, Passwort aus der Env (LAN-Tool, ein Nutzer
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import io
@@ -19,6 +20,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from . import osm, runtime
+from . import luftbild as _luftbild
 from .config import get_settings
 from .db import connect, row_to_dict, utc_now
 from .export import baue_html
@@ -88,6 +90,11 @@ class AnalyseIn(BaseModel):
     model: str = ""
 
 
+class LuftbildQuelleIn(BaseModel):
+    quelle: Literal["esri", "google"] | None = None
+    google_maps_key: str | None = Field(default=None, max_length=200)  # None=unverändert, ""=löschen
+
+
 class SpecIn(BaseModel):
     spec: dict
 
@@ -131,8 +138,9 @@ async def settings_info(_: None = Depends(brauche_admin)):
 
 
 def _settings_payload() -> dict:
-    """Nur Nicht-Geheimnisse fürs Frontend; der API-Key kommt maskiert zurück."""
+    """Nur Nicht-Geheimnisse fürs Frontend; Keys kommen maskiert zurück."""
     key = runtime.hole("openrouter_key")
+    gkey = runtime.hole("google_maps_key")
     return {
         "status": "ok",
         "ollama_url": runtime.hole("ollama_url"),
@@ -140,6 +148,9 @@ def _settings_payload() -> dict:
         "openrouter_aktiv": bool(key),
         "openrouter_key_maskiert": runtime.maske(key),
         "openrouter_model": runtime.hole("openrouter_model"),
+        "luftbild_quelle": runtime.hole("luftbild_quelle"),
+        "google_aktiv": bool(gkey),
+        "google_maps_key_maskiert": runtime.maske(gkey),
     }
 
 
@@ -162,6 +173,19 @@ async def setze_einstellungen(inp: EinstellungenIn, _: None = Depends(brauche_ad
         wert = getattr(inp, feld)
         if wert is not None:
             runtime.setze(feld, wert.strip().rstrip("/"))
+    return _settings_payload()
+
+
+@router.put("/settings/luftbild")
+async def setze_luftbild_quelle(inp: LuftbildQuelleIn, _: None = Depends(brauche_admin)):
+    if inp.google_maps_key is not None:
+        key = inp.google_maps_key.strip()
+        if key == "":
+            runtime.loeschen("google_maps_key")
+        else:
+            runtime.setze("google_maps_key", key)
+    if inp.quelle is not None:
+        runtime.setze("luftbild_quelle", inp.quelle)
     return _settings_payload()
 
 
@@ -219,7 +243,8 @@ async def liste_projekte(_: None = Depends(brauche_admin)):
         rows = conn.execute(
             """SELECT p.id, p.name, p.lat, p.lon, p.privacy_lokal, p.updated_at,
                       (SELECT COUNT(*) FROM bilder b WHERE b.projekt_id=p.id) AS bild_anzahl,
-                      (p.spec IS NOT NULL) AS hat_spec
+                      (p.spec IS NOT NULL) AS hat_spec,
+                      (p.luftbild IS NOT NULL) AS hat_luftbild
                FROM projekte p ORDER BY p.updated_at DESC"""
         ).fetchall()
         return {"status": "ok", "projekte": [row_to_dict(r) for r in rows]}
@@ -255,6 +280,9 @@ async def hole_projekt(projekt_id: int, _: None = Depends(brauche_admin)):
     p["bilder"] = [row_to_dict(b) for b in bilder]
     p["spec"] = json.loads(p["spec"]) if p.get("spec") else None
     p["osm_roh"] = json.loads(p["osm_roh"]) if p.get("osm_roh") else None
+    p["luftbild_meta"] = json.loads(p["luftbild_meta"]) if p.get("luftbild_meta") else None
+    p["hat_luftbild"] = bool(p.get("luftbild"))
+    p.pop("luftbild", None)  # Dateiname bleibt intern — Frontend braucht nur das Meta
     return {"status": "ok", "projekt": p}
 
 
@@ -325,6 +353,49 @@ async def osm_abgleich(projekt_id: int, _: None = Depends(brauche_admin)):
         conn.close()
     spec = _fusion(projekt_id)
     return {"status": "ok", "osm": roh, "spec": spec}
+
+
+def _gps_offset(p: dict) -> list[float]:
+    """Position des GPS-Punkts im zentrierten Koordinatensystem.
+
+    osm.py legt (0,0) auf den GPS-Punkt; fusion.zentrieren() verschiebt den
+    Ursprung auf den Schwerpunkt des Hauptgebäudes. Der GPS-Punkt landet damit
+    bei (−Schwerpunkt). Ohne OSM-Daten: [0, 0].
+    """
+    roh = p.get("osm_roh")
+    gebaeude = (json.loads(roh) if roh else {}).get("gebaeude", [])
+    if not gebaeude:
+        return [0.0, 0.0]
+    haupt = max(gebaeude, key=lambda g: osm._polygon_flaeche([(x, z) for x, z in g["footprint"]]))
+    fp = [(x, z) for x, z in haupt["footprint"]]
+    cx = sum(px for px, _ in fp) / len(fp)
+    cz = sum(pz for _, pz in fp) / len(fp)
+    return [round(-cx, 2), round(-cz, 2)]
+
+
+@router.post("/projekte/{projekt_id}/luftbild")
+async def luftbild_abgleich(projekt_id: int, _: None = Depends(brauche_admin)):
+    """Satellitenbild der Umgebung laden (schickt die Koordinaten an den Karten-Dienst)."""
+    p = _hole_projekt(projekt_id)
+    if p["lat"] is None or p["lon"] is None:
+        raise HTTPException(status_code=400, detail="Erst GPS-Koordinaten speichern")
+    quelle = runtime.hole("luftbild_quelle")
+    gkey = runtime.hole("google_maps_key") if quelle == "google" else ""
+    daten, laenge_m = await _luftbild.hole_luftbild(p["lat"], p["lon"], quelle, gkey)
+    name = _luftbild.speichere_luftbild(get_settings().media_dir, projekt_id, daten)
+    meta = {"offset": _gps_offset(p), "laenge_m": round(laenge_m, 2), "quelle": quelle}
+    if p.get("luftbild"):
+        (get_settings().media_dir / p["luftbild"]).unlink(missing_ok=True)
+    conn = connect()
+    try:
+        conn.execute(
+            "UPDATE projekte SET luftbild=?, luftbild_meta=?, updated_at=? WHERE id=?",
+            (name, json.dumps(meta), utc_now(), projekt_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"status": "ok", "meta": meta}
 
 
 def _fusion(projekt_id: int, haus_breite: float | None = None) -> dict:
@@ -508,17 +579,35 @@ def _spec_oder_demo(projekt_id: int) -> SceneSpec:
     return fusioniere(None, [])
 
 
+def _luftbild_injektion(p: dict) -> dict | None:
+    """Luftbild als Data-URL fürs Standalone-HTML (Datei bleibt lokal, aber der
+    Export muss die Szene offline zeigen können)."""
+    if not p.get("luftbild"):
+        return None
+    pfad = get_settings().media_dir / p["luftbild"]
+    if not pfad.exists():
+        return None
+    meta = json.loads(p["luftbild_meta"]) if p.get("luftbild_meta") else {}
+    b64 = base64.b64encode(pfad.read_bytes()).decode()
+    return {
+        "dataUrl": f"data:image/jpeg;base64,{b64}",
+        "offset": meta.get("offset", [0.0, 0.0]),
+        "laenge_m": meta.get("laenge_m", 300.0),
+        "quelle": meta.get("quelle", "esri"),
+    }
+
+
 @router.get("/projekte/{projekt_id}/preview", response_class=None)
 async def preview(projekt_id: int, _: None = Depends(brauche_admin)):
     p = _hole_projekt(projekt_id)
-    html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"])
+    html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"], luftbild=_luftbild_injektion(p))
     return Response(content=html, media_type="text/html")
 
 
 @router.get("/projekte/{projekt_id}/export")
 async def export(projekt_id: int, _: None = Depends(brauche_admin)):
     p = _hole_projekt(projekt_id)
-    html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"])
+    html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"], luftbild=_luftbild_injektion(p))
     sicher = "".join(c if c.isalnum() else "_" for c in p["name"])[:40] or "anwesen"
     return Response(
         content=html,
