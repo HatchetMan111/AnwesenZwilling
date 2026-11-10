@@ -88,7 +88,7 @@ fehler() {
   sleep 0.5   # tee den Rest schreiben lassen
   tail -n 25 "$LOGFILE" || true
   echo    "──────────────────────────────────────────────────────"
-  echo    "Vollständiger Trace:   bash -x $0 <Optionen>"
+  echo    "Vollständiger Trace:   bash -x $SCRIPT_REF <Optionen>"
   echo    "Dienst-Logs im CT:     pct exec <CT-ID> -- journalctl -u ${APP} -n 50 --no-pager"
   exit "$code"
 }
@@ -100,6 +100,13 @@ lade() { # $1 = Zielpfad, $2 = URL  (wget bevorzugt, curl als Fallback)
 }
 
 # ---- CT-Helfer ----------------------------------------------------------------
+# Referenz auf dieses Script für Hinweise — beim Einzeiler (bash -c) heißt $0 nur
+# "bash", dann zeigen wir den kanonischen Repo-Pfad.
+SCRIPT_REF="${BASH_SOURCE[0]:-$0}"
+if [[ "$SCRIPT_REF" == "bash" || "$SCRIPT_REF" == "-bash" || -z "$SCRIPT_REF" ]]; then
+  SCRIPT_REF="install/anwesentwin.sh"
+fi
+
 hostname_von() { # $1 = CT-ID → Hostname (leer bei Fehler/Lock, mit Unlock-Wiederholung)
   local id="$1" hn
   hn=$(${PCT} config "$id" 2>/dev/null | awk '/^hostname:/ {print $2}' || true)
@@ -121,11 +128,18 @@ find_ct_by_hostname() {
   echo ""
 }
 
+# Kugelsicher: fragt DIREKT beim Cluster nach statt pct list zu parsen —
+# VMIDs sind zwischen VMs (qm) und Containern (pct) geteilt, beide prüfen.
+_ist_id_belegt() { # $1 = ID
+  local id="$1"
+  ${PCT} status "$id" >/dev/null 2>&1 && return 0
+  qm status "$id" >/dev/null 2>&1 && return 0
+  return 1
+}
+
 find_free_id() {
-  local used i
-  used=$(${PCT} list 2>/dev/null | awk 'NR>1 {print $1}' || true)
-  i=$((ID_SCAN_START))
-  while [[ " $used " == *" $i "* ]]; do i=$((i+1)); done
+  local i=$((ID_SCAN_START))
+  while _ist_id_belegt "$i"; do i=$((i+1)); done
   echo "$i"
 }
 
@@ -215,7 +229,7 @@ verifiziere() { # $1 = CT-ID
     echo "─────────── journalctl -u ${APP} -n 50 ───────────"
     journal_auszug "$ct"
     echo "──────────────────────────────────────────────────"
-    die "Siehe Logs oben — Debug: bash -x $0"
+    die "Siehe Logs oben — Debug: bash -x $SCRIPT_REF"
   fi
   msg_ok "systemd-Dienst läuft (systemctl is-active → active)"
   if ! ${PCT} exec "$ct" -- curl -sf "http://localhost:${APP_PORT}/api/health" >/dev/null; then
@@ -223,7 +237,7 @@ verifiziere() { # $1 = CT-ID
     echo "─────────── journalctl -u ${APP} -n 50 ───────────"
     journal_auszug "$ct"
     echo "──────────────────────────────────────────────────"
-    die "Siehe Logs oben — Debug: bash -x $0"
+    die "Siehe Logs oben — Debug: bash -x $SCRIPT_REF"
   fi
   health=$(${PCT} exec "$ct" -- curl -sf "http://localhost:${APP_PORT}/api/health")
   msg_ok "Web-UI antwortet (HTTP-Check: $health)"
@@ -294,13 +308,14 @@ EXISTING=$(find_ct_by_hostname)
 if [[ -n "$EXISTING" ]]; then
   msg_info "Container existiert bereits (ID $EXISTING) — wechsle in den Update-Modus."
   if [[ "$LOCAL_FILES" == true ]]; then
-    exec bash "$0" --update --local
+    exec bash "$SCRIPT_REF" --update --local
   else
-    exec bash "$0" --update
+    exec bash "$SCRIPT_REF" --update
   fi
 fi
 
 [[ -z "$CT_ID" ]] && CT_ID=$(find_free_id)
+msg_info "Nächste freie CT-ID: ${CT_ID} (Scan ab ${ID_SCAN_START})"
 
 # Existenzprüfung per ID — fängt auch Fälle, in denen der Hostname-Match scheiterte
 # (z. B. halb angelegter/gelockter CT aus einem früheren, abgebrochenen Lauf).
@@ -308,13 +323,13 @@ if ${PCT} status "$CT_ID" >/dev/null 2>&1; then
   hn=$(hostname_von "$CT_ID")
   if [[ "${hn,,}" == "${CT_HOSTNAME,,}" ]]; then
     msg_info "Container $CT_ID gehört bereits zu ${APP_TITLE} — wechsle in den Update-Modus."
-    if [[ "$LOCAL_FILES" == true ]]; then exec bash "$0" --update --local; else exec bash "$0" --update; fi
+    if [[ "$LOCAL_FILES" == true ]]; then exec bash "$SCRIPT_REF" --update --local; else exec bash "$SCRIPT_REF" --update; fi
   fi
-  die "CT $CT_ID existiert bereits (Hostname: ${hn:-unbekannt/gesperrt}, nicht '${CT_HOSTNAME}').
-       → Anderen CT wählen:    bash $0 --id <freie-ID>
-       → Falls es ein Überbleibsel eines abgebrochenen Laufs ist:
-           pct unlock $CT_ID 2>/dev/null; pct destroy $CT_ID
-         und danach diesen Installer erneut ausführen."
+  die "CT $CT_ID existiert bereits (Hostname: ${hn:-unbekannt/gesperrt}, nicht '${CT_HOSTNAME}') — wird nicht angetastet.
+       → Der Installer wählt automatisch die nächste freie ID — einfach erneut ausführen:
+           bash $SCRIPT_REF
+       → Alternativ eine feste ID wählen:
+           bash $SCRIPT_REF --id <freie-ID>"
 fi
 
 [[ -z "$CT_PASSWORD" ]] && CT_PASSWORD=$(openssl rand -hex 12)
@@ -379,10 +394,10 @@ echo "  Passwort:  ${WEB_PASSWORD}"
 echo "  CT-Root:   ${CT_PASSWORD}"
 echo "  CT-ID:     ${CT_ID}"
 echo "--------------------------------------------------------------"
-echo "  Update:    bash $0 --update"
-echo "  Backup:    bash $0 --backup"
-echo "  Status:    bash $0 --status"
-echo "  Reboot-Test: pct reboot ${CT_ID} && bash $0 --status"
+echo "  Update:    bash $SCRIPT_REF --update"
+echo "  Backup:    bash $SCRIPT_REF --backup"
+echo "  Status:    bash $SCRIPT_REF --status"
+echo "  Reboot-Test: pct reboot ${CT_ID} && bash $SCRIPT_REF --status"
 echo "=============================================================="
 echo "  Vollständiges Install-Log: $LOGFILE"
 echo "=============================================================="
