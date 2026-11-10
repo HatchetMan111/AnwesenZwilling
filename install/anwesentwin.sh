@@ -23,7 +23,9 @@
 #    --port N           Web-UI-Port (Default: 8080)
 #  Debug:  bash -x install/anwesentwin.sh   (vollständiger Trace)
 # =============================================================================
-set -Eeuo pipefail
+# -euo pipefail ohne -E: der ERR-Trap feuert nur in der HAUPT-Shell — fehlerhafte
+# Subshells (BASH_SOURCE in $(...) etc.) scheitern nach oben und lösen dort den Trap aus.
+set -euo pipefail
 
 # ---- Konfiguration (nur HIER anpassen) ---------------------------------------
 APP="anwesentwin"                  # CT-Hostname + systemd-Dienstname
@@ -66,10 +68,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---- Ausgabe-Helfer (Community-Scripts-Stil) ---------------------------------
+# WICHTIG: alles auf STDERR — msg-Aufrufe in $( ... )-erfassten Funktionen
+# (z. B. neuestes_template) dürfen den erfassten Wert nie vermüllen.
 C_INFO='\e[36m'; C_OK='\e[32m'; C_ERR='\e[31m'; C_RESET='\e[0m'
-msg_info() { echo -e "${C_INFO}⏳${C_RESET} $*"; }
-msg_ok()   { echo -e "${C_OK}✅${C_RESET} $*"; }
-msg_error(){ echo -e "${C_ERR}❌${C_RESET} $*"; }
+msg_info() { echo -e "${C_INFO}⏳${C_RESET} $*" >&2; }
+msg_ok()   { echo -e "${C_OK}✅${C_RESET} $*" >&2; }
+msg_error(){ echo -e "${C_ERR}❌${C_RESET} $*" >&2; }
 die()      { msg_error "$*"; exit 1; }
 
 # ---- Fehlerkette: kompletter Kontext statt nur der letzten Zeile -------------
@@ -96,10 +100,21 @@ lade() { # $1 = Zielpfad, $2 = URL  (wget bevorzugt, curl als Fallback)
 }
 
 # ---- CT-Helfer ----------------------------------------------------------------
+hostname_von() { # $1 = CT-ID → Hostname (leer bei Fehler/Lock, mit Unlock-Wiederholung)
+  local id="$1" hn
+  hn=$(${PCT} config "$id" 2>/dev/null | awk '/^hostname:/ {print $2}' || true)
+  if [[ -z "$hn" ]] && [[ "$(${PCT} status "$id" 2>/dev/null || true)" == *"locked"* ]]; then
+    ${PCT} unlock "$id" 2>/dev/null || true
+    hn=$(${PCT} config "$id" 2>/dev/null | awk '/^hostname:/ {print $2}' || true)
+  fi
+  echo "$hn"
+}
+
 find_ct_by_hostname() {
-  local id
-  for id in $(${PCT} list 2>/dev/null | awk 'NR>1 {print $1}'); do
-    if [[ "$(${PCT} config "$id" 2>/dev/null | grep '^hostname:' || true)" == *": ${CT_HOSTNAME}" ]]; then
+  local id hn
+  for id in $(${PCT} list 2>/dev/null | awk 'NR>1 {print $1}' || true); do
+    hn=$(hostname_von "$id")
+    if [[ "${hn,,}" == "${CT_HOSTNAME,,}" ]]; then
       echo "$id"; return 0
     fi
   done
@@ -214,7 +229,8 @@ verifiziere() { # $1 = CT-ID
   msg_ok "Web-UI antwortet (HTTP-Check: $health)"
 }
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# $0-Fallback: beim Einzeiler (bash -c "$(...)") ist BASH_SOURCE[0] nicht gesetzt
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 
 # ---- Status -------------------------------------------------------------------
 if [[ "$MODE" == "status" ]]; then
@@ -285,6 +301,22 @@ if [[ -n "$EXISTING" ]]; then
 fi
 
 [[ -z "$CT_ID" ]] && CT_ID=$(find_free_id)
+
+# Existenzprüfung per ID — fängt auch Fälle, in denen der Hostname-Match scheiterte
+# (z. B. halb angelegter/gelockter CT aus einem früheren, abgebrochenen Lauf).
+if ${PCT} status "$CT_ID" >/dev/null 2>&1; then
+  hn=$(hostname_von "$CT_ID")
+  if [[ "${hn,,}" == "${CT_HOSTNAME,,}" ]]; then
+    msg_info "Container $CT_ID gehört bereits zu ${APP_TITLE} — wechsle in den Update-Modus."
+    if [[ "$LOCAL_FILES" == true ]]; then exec bash "$0" --update --local; else exec bash "$0" --update; fi
+  fi
+  die "CT $CT_ID existiert bereits (Hostname: ${hn:-unbekannt/gesperrt}, nicht '${CT_HOSTNAME}').
+       → Anderen CT wählen:    bash $0 --id <freie-ID>
+       → Falls es ein Überbleibsel eines abgebrochenen Laufs ist:
+           pct unlock $CT_ID 2>/dev/null; pct destroy $CT_ID
+         und danach diesen Installer erneut ausführen."
+fi
+
 [[ -z "$CT_PASSWORD" ]] && CT_PASSWORD=$(openssl rand -hex 12)
 [[ -z "$WEB_PASSWORD" ]] && WEB_PASSWORD=$(openssl rand -hex 8)
 CT_TEMPLATE=$(neuestes_template)
