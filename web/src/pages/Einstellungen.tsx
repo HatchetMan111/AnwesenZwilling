@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Cpu, Globe, KeyRound, Loader2, Save, Trash2, Zap } from 'lucide-react';
+import { Cpu, Globe, KeyRound, Loader2, Save, Trash2, Zap } from 'lucide-react';
+import AppShell from '../components/AppShell';
 import { api, toastSetzen } from '../api';
-
-interface Einst {
-  ollama_url: string;
-  ollama_model: string;
-  openrouter_aktiv: boolean;
-  openrouter_key_maskiert: string;
-  openrouter_model: string;
-}
+import type { Einst } from '../types';
 
 export default function Einstellungen() {
   const [einst, setEinst] = useState<Einst | null>(null);
@@ -95,17 +88,15 @@ export default function Einstellungen() {
     } catch (e: any) { toastSetzen(e.message, false); } finally { setBusy(''); }
   }
 
-  if (!einst) return <div className="p-10 text-lv-blass">Lade …</div>;
+  if (!einst) return <AppShell><p className="text-lv-blass">Lade …</p></AppShell>;
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-5">
-      <header className="flex items-center gap-3">
-        <Link to="/" className="btn-sekundaer !px-2.5"><ArrowLeft size={16} /></Link>
-        <div>
-          <h1 className="text-xl font-semibold">Einstellungen</h1>
-          <p className="text-xs text-lv-blass">KI-Provider konfigurieren — gespeichert in der lokalen Datenbank</p>
-        </div>
-      </header>
+    <AppShell>
+    <div className="max-w-3xl mx-auto space-y-5">
+      <div>
+        <h1 className="text-xl font-semibold">Einstellungen</h1>
+        <p className="text-xs text-lv-blass">KI-Provider konfigurieren — gespeichert in der lokalen Datenbank</p>
+      </div>
 
       {/* Ollama */}
       <section className="karte space-y-3">
@@ -189,5 +180,6 @@ export default function Einstellungen() {
         (<code>OLLAMA_URL</code>, <code>OPENROUTER_API_KEY</code> …) — Env bleibt als Fallback.
       </p>
     </div>
+    </AppShell>
   );
 }

@@ -32,7 +32,6 @@ class Settings:
         self.port: int = int(os.environ.get("ANWESENTWIN_PORT", "8768"))
         # Upload-Limits (angelehnt an die Signage-App)
         self.max_upload_mb: int = int(os.environ.get("ANWESENTWIN_MAX_MB", "30"))
-        self.secret_warned = False
 
     def ensure_dirs(self) -> None:
         self.media_dir.mkdir(parents=True, exist_ok=True)

@@ -6,6 +6,7 @@ drin (die Spec lebt in lokalen Metern), keine Bildinhalte drin.
 """
 from __future__ import annotations
 
+import html
 import json
 from pathlib import Path
 
@@ -43,10 +44,10 @@ def baue_html(spec: SceneSpec, titel: str = "Mein Anwesen") -> str:
             "engine/twin.js fehlt — erst im Ordner engine/ 'npm install && npm run build' ausführen"
         )
     bundle = ENGINE_BUNDLE.read_text(encoding="utf-8")
-    # "</script" in JSON-Daten neutralisieren (guiltig als \/ in JSON-Strings);
+    # "</script" in JSON-Daten neutralisieren (gültig als \/ in JSON-Strings);
     # das Engine-Bundle macht esbuild selbst sicher (String-Literale werden escaped).
     daten = json.dumps(spec.model_dump(), ensure_ascii=False).replace("</", "<\\/")
-    html = TEMPLATE.replace("__TITEL__", titel)
-    html = html.replace("__SZENENDATEN__", daten)
-    html = html.replace("__ENGINE__", bundle)
-    return html
+    html_text = TEMPLATE.replace("__TITEL__", html.escape(titel))
+    html_text = html_text.replace("__SZENENDATEN__", daten)
+    html_text = html_text.replace("__ENGINE__", bundle)
+    return html_text

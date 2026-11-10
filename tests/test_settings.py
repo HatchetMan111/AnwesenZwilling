@@ -72,3 +72,16 @@ def test_openrouter_test_ohne_key(client):
     d = client.post("/api/settings/test-openrouter").json()
     assert d["gueltig"] is False
     assert "kein" in d["fehler"].lower()
+
+
+def test_unbekannter_provider_wird_abgelehnt(client):
+    """Literal-Validierung: unbekannter Provider = 422, kein 500 im Handler."""
+    r = client.post("/api/projekte/999/analyse", json={"provider": "bogus"})
+    assert r.status_code == 422
+
+
+def test_gps_nan_wird_abgelehnt(client):
+    client.post("/api/projekte", json={"name": "T"})
+    r = client.put("/api/projekte/1", json={"lat": "NaN"})
+    # NaN als String → pydantic lehnt ab; direkt als float kommt json nicht durch
+    assert r.status_code in (400, 422)

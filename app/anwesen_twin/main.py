@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
@@ -44,6 +44,9 @@ if WEB_DIST.exists():
 
     @app.get("/{pfad:path}", include_in_schema=False)
     async def spa(pfad: str):
+        if pfad == "api" or pfad.startswith("api/"):
+            # Unbekannte API-Route: sauberes 404-JSON statt der SPA-Shell
+            return JSONResponse({"detail": "Nicht gefunden"}, status_code=404)
         kandidat = WEB_DIST / pfad
         if pfad and kandidat.is_file():
             return FileResponse(kandidat)

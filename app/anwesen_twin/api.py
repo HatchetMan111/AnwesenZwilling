@@ -8,19 +8,20 @@ import hashlib
 import hmac
 import io
 import json
+import math
 import time
 import uuid
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from . import osm, runtime
 from .config import get_settings
 from .db import connect, row_to_dict, utc_now
 from .export import baue_html
-from .llm.base import provider_fuer
 from .twin.analyze import analysiere_bilder, provider_erlaubt
 from .twin.fusion import fusioniere
 from .twin.schema import SceneSpec, SpecFragment
@@ -83,7 +84,7 @@ class ProjektUpdate(BaseModel):
 
 
 class AnalyseIn(BaseModel):
-    provider: str = "ollama"
+    provider: Literal["ollama", "openrouter"] = "ollama"
     model: str = ""
 
 
@@ -265,9 +266,13 @@ async def aktualisiere_projekt(projekt_id: int, inp: ProjektUpdate, _: None = De
         felder.append("name=?")
         werte.append(inp.name)
     if inp.lat is not None:
+        if not math.isfinite(inp.lat):
+            raise HTTPException(status_code=400, detail="Breite muss eine gültige Zahl sein")
         felder.append("lat=?")
         werte.append(inp.lat)
     if inp.lon is not None:
+        if not math.isfinite(inp.lon):
+            raise HTTPException(status_code=400, detail="Länge muss eine gültige Zahl sein")
         felder.append("lon=?")
         werte.append(inp.lon)
     if inp.privacy_lokal is not None:
@@ -404,8 +409,6 @@ async def upload_bilder(projekt_id: int, files: list[UploadFile] = File(...), _:
 
 @router.get("/bilder/{bild_id}/datei")
 async def bild_datei(bild_id: int, _: None = Depends(brauche_admin)):
-    from fastapi.responses import FileResponse
-
     conn = connect()
     try:
         row = conn.execute("SELECT dateiname FROM bilder WHERE id=?", (bild_id,)).fetchone()
@@ -454,7 +457,6 @@ async def analyse(projekt_id: int, inp: AnalyseIn, _: None = Depends(brauche_adm
     if not rows:
         raise HTTPException(status_code=400, detail="Keine Bilder zum Analysieren")
     pfade = [str(get_settings().media_dir / r["dateiname"]) for r in rows]
-    provider = provider_fuer(inp.provider)  # früh prüfen, ob der Provider existiert
     fragment = await analysiere_bilder(pfade, inp.provider, inp.model)
     fragment_json = fragment.model_dump_json()
     conn = connect()
@@ -510,8 +512,6 @@ def _spec_oder_demo(projekt_id: int) -> SceneSpec:
 async def preview(projekt_id: int, _: None = Depends(brauche_admin)):
     p = _hole_projekt(projekt_id)
     html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"])
-    from fastapi.responses import Response
-
     return Response(content=html, media_type="text/html")
 
 
@@ -519,8 +519,6 @@ async def preview(projekt_id: int, _: None = Depends(brauche_admin)):
 async def export(projekt_id: int, _: None = Depends(brauche_admin)):
     p = _hole_projekt(projekt_id)
     html = baue_html(_spec_oder_demo(projekt_id), titel=p["name"])
-    from fastapi.responses import Response
-
     sicher = "".join(c if c.isalnum() else "_" for c in p["name"])[:40] or "anwesen"
     return Response(
         content=html,

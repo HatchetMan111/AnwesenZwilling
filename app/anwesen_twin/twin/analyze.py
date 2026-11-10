@@ -69,12 +69,6 @@ def _bild_zu_b64(pfad, max_kante: int = MAX_KANTE) -> str:
 
 async def analysiere_bilder(bild_pfade: list[str], provider_name: str, model: str = "") -> SpecFragment:
     """Schickt bis zu MAX_BILDER Bilder an den Provider und validiert das Fragment."""
-    from ..config import get_settings
-
-    s = get_settings()
-    if provider_name == "openrouter" and len(bild_pfade) > 0:
-        pass  # bewusst erlaubt — die API-Schicht ruft hier nur auf, wenn das Projekt es erlaubt
-
     pfade = bild_pfade[:MAX_BILDER]
     bilder_b64 = [_bild_zu_b64(p) for p in pfade]
     provider = provider_fuer(provider_name)

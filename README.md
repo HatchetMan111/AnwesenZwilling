@@ -2,6 +2,20 @@
 
 Aus **GPS-Koordinaten + Bildern** einen interaktiven **three.js-Digital-Twin** des Anwesens bauen — selbst gehostet in einem LXC auf Proxmox.
 
+## So funktioniert's (für Nutzer)
+
+Geführter Assistent im Dashboard — kein technisches Vorwissen nötig:
+
+1. **Standort** — GPS-Koordinaten eintragen (oder Adresse suchen): die echten Gebäudeumrisse von OpenStreetMap kommen automatisch.
+2. **Bilder** — ein Foto vom Haus genügt; mehrere machen das Ergebnis genauer.
+3. **Analyse** — die KI erkennt Dachform, Etagen, Farben, PV-Anlage und Umgebung (lokal per Ollama oder Cloud per OpenRouter — umschaltbar, „Nur lokal"-Flag pro Projekt).
+4. **Anpassen** — alles per Klick: Etagen, Dachform, Farben, Fensteranteil, PV, Bäume, Hecken, Wege.
+5. **Ergebnis** — live ansehen (Morgen/Goldene Stunde/Dämmerung/Nacht) und als **einzelne HTML-Datei** herunterladen — läuft offline, teilbar, ohne GPS-Koordinaten.
+
+| Startseite | Standort | Analyse | Anpassen | Ergebnis (Nacht) |
+|---|---|---|---|---|
+| ![Startseite](docs/screenshot-startseite.png) | ![Standort](docs/screenshot-schritt1-standort.png) | ![Analyse](docs/screenshot-schritt3-analyse.png) | ![Anpassen](docs/screenshot-schritt4-anpassen.png) | ![Nacht](docs/screenshot-schritt5-nacht.png) |
+
 ## Installation (Einzeiler auf dem Proxmox-Host)
 
 ```bash

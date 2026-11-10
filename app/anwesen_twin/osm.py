@@ -67,6 +67,8 @@ out geom;"""
                 continue
             ergebnis["gebaeude"].append({"footprint": footprint, "tags": {k: v for k, v in tags.items() if k.startswith("building")}})
         elif "highway" in tags:
+            if len(punkte) > 2 and punkte[0] == punkte[-1]:
+                punkte = punkte[:-1]  # geschlossener Ring (z. B. Wendeschleife): Duplikat raus
             art = "zufahrt" if tags.get("highway") == "driveway" else "weg"
             ergebnis["wege"].append({"punkte": punkte, "art": art, "breite": 3.0 if art == "zufahrt" else 1.2})
         elif "landuse" in tags:

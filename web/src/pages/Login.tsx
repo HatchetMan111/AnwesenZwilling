@@ -30,7 +30,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid place-items-center">
-      <form onSubmit={submit} className="karte w-90 max-w-[90vw] space-y-4">
+      <form onSubmit={submit} className="karte w-96 max-w-[90vw] space-y-4">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-lv-bg grid place-items-center border border-lv-kante">
             <House className="text-lv-limette" size={22} />

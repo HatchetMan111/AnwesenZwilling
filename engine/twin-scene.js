@@ -454,7 +454,13 @@ export function buildScene(spec) {
   const glows = [];
 
   // Boden
-  const boden = new THREE.Mesh(new THREE.CircleGeometry(160, 48), new THREE.MeshStandardMaterial({ map: texGrass, roughness: 1 }));
+  // Boden; boden_farbe tönt die Grastextur (nur wenn vom Default abweichend —
+  // der Default entspricht der Textur selbst, sonst würde alles doppelt grün).
+  const bodenMat = new THREE.MeshStandardMaterial({ map: texGrass, roughness: 1 });
+  if (spec.grundstueck?.boden_farbe && spec.grundstueck.boden_farbe.toLowerCase() !== '#7da05a') {
+    bodenMat.color.set(spec.grundstueck.boden_farbe);
+  }
+  const boden = new THREE.Mesh(new THREE.CircleGeometry(160, 48), bodenMat);
   boden.rotation.x = -Math.PI / 2;
   boden.receiveShadow = true;
   group.add(boden);
