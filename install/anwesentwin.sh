@@ -144,17 +144,22 @@ find_free_id() {
 }
 
 neuestes_template() {
-  local quelle
-  quelle=$(${PVEAM:-pveam} list local 2>/dev/null | grep 'debian-12-standard' | awk -F'[; ]' '{print $2}' | sort -V | tail -1 || true)
-  if [[ -z "$quelle" ]]; then
+  # Formatunabhängig: Dateinamen direkt aus der Zeile extrahieren (pveam trennt
+  # je nach Version mit Tabs oder Leerzeichen — Feldpositionen sind unzuverlässig).
+  local datei
+  datei=$(${PVEAM:-pveam} list local 2>/dev/null | grep -o 'debian-12-standard_[^[:space:]]*\.tar\.zst' | sort -V | tail -1 || true)
+  if [[ -z "$datei" ]]; then
     msg_info "Lade Debian-12-Template herunter …"
     ${PVEAM:-pveam} update >/dev/null 2>&1 || true
-    local datei
-    datei=$(${PVEAM:-pveam} available --section system | grep -o 'debian-12-standard_[0-9.]*-[0-9]*_amd64.tar.zst' | sort -V | tail -1)
+    datei=$(${PVEAM:-pveam} available --section system 2>/dev/null | grep -o 'debian-12-standard_[^[:space:]]*\.tar\.zst' | sort -V | tail -1 || true)
+    if [[ -z "$datei" ]]; then
+      die "Kein debian-12-standard-Template gefunden. Manuell laden und Installer erneut ausführen:
+         pveam update && pveam available --section system
+         pveam download local debian-12-standard_<VERSION>_amd64.tar.zst"
+    fi
     ${PVEAM:-pveam} download local "$datei" >/dev/null
-    quelle=$(${PVEAM:-pveam} list local | grep 'debian-12-standard' | awk -F'[; ]' '{print $2}' | sort -V | tail -1)
   fi
-  echo "$quelle"
+  echo "$datei"
 }
 
 # ---- App-Dateien: GitHub-Tarball oder --local ---------------------------------
